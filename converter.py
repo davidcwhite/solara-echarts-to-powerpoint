@@ -1,6 +1,7 @@
 """Convert ECharts option dicts to native, editable PowerPoint charts."""
 
 from io import BytesIO
+from typing import List, Optional, Tuple
 
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData, XyChartData
@@ -23,14 +24,14 @@ CHART_WIDTH = Inches(12.333)
 CHART_HEIGHT = Inches(5.8)
 
 
-def _extract_title(option: dict) -> str | None:
+def _extract_title(option: dict) -> Optional[str]:
     title = option.get("title")
     if isinstance(title, dict):
         return title.get("text")
     return None
 
 
-def _extract_categories(option: dict, series_list: list[dict]) -> list[str]:
+def _extract_categories(option: dict, series_list: List[dict]) -> List[str]:
     """Extract category labels from xAxis.data or from series data point names."""
     x_axis = option.get("xAxis")
     if isinstance(x_axis, dict) and "data" in x_axis:
@@ -47,7 +48,7 @@ def _extract_categories(option: dict, series_list: list[dict]) -> list[str]:
     return [str(i + 1) for i in range(max_len)]
 
 
-def _extract_series_values(series: dict) -> list[float]:
+def _extract_series_values(series: dict) -> List[float]:
     """Extract numeric values from a series data array."""
     values = []
     for item in series.get("data", []):
@@ -60,7 +61,7 @@ def _extract_series_values(series: dict) -> list[float]:
     return values
 
 
-def _extract_scatter_points(series: dict) -> list[tuple[float, float]]:
+def _extract_scatter_points(series: dict) -> List[Tuple[float, float]]:
     """Extract (x, y) pairs from scatter series data."""
     points = []
     for item in series.get("data", []):
@@ -82,7 +83,7 @@ def _add_title_textbox(slide, text: str):
 def _build_category_chart(
     prs: Presentation,
     option: dict,
-    series_list: list[dict],
+    series_list: List[dict],
     chart_type_str: str,
 ):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -110,7 +111,7 @@ def _build_category_chart(
         chart.legend.include_in_layout = False
 
 
-def _build_pie_chart(prs: Presentation, option: dict, series_list: list[dict]):
+def _build_pie_chart(prs: Presentation, option: dict, series_list: List[dict]):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     title = _extract_title(option)
@@ -135,7 +136,7 @@ def _build_pie_chart(prs: Presentation, option: dict, series_list: list[dict]):
     chart.legend.include_in_layout = False
 
 
-def _build_scatter_chart(prs: Presentation, option: dict, series_list: list[dict]):
+def _build_scatter_chart(prs: Presentation, option: dict, series_list: List[dict]):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     title = _extract_title(option)
