@@ -5,8 +5,11 @@ from typing import List, Optional, Set, Tuple
 
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData, XyChartData
+from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.util import Inches, Pt
+
+from theme import DEFAULT, PptxTheme
 
 SUPPORTED_TYPES: Set[str] = {
     "bar",
@@ -24,6 +27,11 @@ CHART_LEFT = Inches(0.5)
 CHART_TOP = Inches(1.2)
 CHART_WIDTH = Inches(12.333)
 CHART_HEIGHT = Inches(5.8)
+
+_LEGEND_POS_MAP = {
+    "bottom": XL_LEGEND_POSITION.BOTTOM,
+    "right": XL_LEGEND_POSITION.RIGHT,
+}
 
 
 def is_exportable(option: dict) -> bool:
@@ -80,14 +88,50 @@ def _extract_scatter_points(series: dict) -> List[Tuple[float, float]]:
     return points
 
 
-def _add_title_textbox(slide, text: str):
+def _add_title_textbox(slide, text: str, theme: PptxTheme):
     txBox = slide.shapes.add_textbox(
         Inches(0.5), Inches(0.2), Inches(12.333), Inches(0.8)
     )
     p = txBox.text_frame.paragraphs[0]
     p.text = text
-    p.font.size = Pt(24)
+    p.font.size = Pt(theme.title_size)
     p.font.bold = True
+    p.font.name = theme.title_font
+
+
+def _apply_legend(chart, theme: PptxTheme):
+    chart.has_legend = True
+    chart.legend.position = _LEGEND_POS_MAP.get(
+        theme.legend_position, XL_LEGEND_POSITION.BOTTOM
+    )
+    chart.legend.include_in_layout = False
+
+
+def _color_from_hex(hex_str: str) -> RGBColor:
+    hex_str = hex_str.lstrip("#")
+    return RGBColor.from_string(hex_str)
+
+
+def _apply_theme(chart, theme: PptxTheme, chart_kind: str):
+    """Apply palette colours from *theme* to each series in *chart*."""
+    palette = theme.palette
+    if not palette:
+        return
+
+    use_line = chart_kind in ("line", "radar")
+
+    for i, series in enumerate(chart.series):
+        color = _color_from_hex(palette[i % len(palette)])
+        if use_line:
+            series.format.line.color.rgb = color
+            series.format.line.width = Pt(2.5)
+        else:
+            fill = series.format.fill
+            fill.solid()
+            fill.fore_color.rgb = color
+
+
+# ── Sub-variant detection ────────────────────────────────────────────
 
 
 def _is_horizontal_bar(option: dict) -> bool:
@@ -144,17 +188,21 @@ def _resolve_category_chart_type(
     return XL_CHART_TYPE.COLUMN_CLUSTERED
 
 
+# ── Chart builders ───────────────────────────────────────────────────
+
+
 def _build_category_chart(
     prs: Presentation,
     option: dict,
     series_list: List[dict],
     chart_type_str: str,
+    theme: PptxTheme,
 ):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     title = _extract_title(option)
     if title:
-        _add_title_textbox(slide, title)
+        _add_title_textbox(slide, title, theme)
 
     if _is_horizontal_bar(option):
         categories = _extract_categories(
@@ -175,23 +223,25 @@ def _build_category_chart(
     )
     chart = graphic_frame.chart
 
+    kind = "line" if chart_type_str == "line" else "bar"
+    _apply_theme(chart, theme, kind)
+
     if len(series_list) > 1:
-        chart.has_legend = True
-        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
-        chart.legend.include_in_layout = False
+        _apply_legend(chart, theme)
 
 
 def _build_pie_chart(
     prs: Presentation,
     option: dict,
     series_list: List[dict],
+    theme: PptxTheme,
     as_donut: bool = False,
 ):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     title = _extract_title(option)
     if title:
-        _add_title_textbox(slide, title)
+        _add_title_textbox(slide, title, theme)
 
     series = series_list[0]
     categories = _extract_categories(option, [series])
@@ -207,17 +257,28 @@ def _build_pie_chart(
     )
     chart = graphic_frame.chart
 
-    chart.has_legend = True
-    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
-    chart.legend.include_in_layout = False
+    palette = theme.palette
+    if palette:
+        plot = chart.plots[0]
+        for i, point in enumerate(plot.series[0].points):
+            fill = point.format.fill
+            fill.solid()
+            fill.fore_color.rgb = _color_from_hex(palette[i % len(palette)])
+
+    _apply_legend(chart, theme)
 
 
-def _build_scatter_chart(prs: Presentation, option: dict, series_list: List[dict]):
+def _build_scatter_chart(
+    prs: Presentation,
+    option: dict,
+    series_list: List[dict],
+    theme: PptxTheme,
+):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     title = _extract_title(option)
     if title:
-        _add_title_textbox(slide, title)
+        _add_title_textbox(slide, title, theme)
 
     chart_data = XyChartData()
     for s in series_list:
@@ -235,18 +296,23 @@ def _build_scatter_chart(prs: Presentation, option: dict, series_list: List[dict
     )
     chart = graphic_frame.chart
 
+    _apply_theme(chart, theme, "scatter")
+
     if len(series_list) > 1:
-        chart.has_legend = True
-        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
-        chart.legend.include_in_layout = False
+        _apply_legend(chart, theme)
 
 
-def _build_radar_chart(prs: Presentation, option: dict, series_list: List[dict]):
+def _build_radar_chart(
+    prs: Presentation,
+    option: dict,
+    series_list: List[dict],
+    theme: PptxTheme,
+):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     title = _extract_title(option)
     if title:
-        _add_title_textbox(slide, title)
+        _add_title_textbox(slide, title, theme)
 
     indicators = option.get("radar", {})
     if isinstance(indicators, list):
@@ -273,18 +339,23 @@ def _build_radar_chart(prs: Presentation, option: dict, series_list: List[dict])
     )
     chart = graphic_frame.chart
 
-    chart.has_legend = True
-    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
-    chart.legend.include_in_layout = False
+    _apply_theme(chart, theme, "radar")
+    _apply_legend(chart, theme)
 
 
-def echarts_to_pptx(option: dict) -> bytes:
+# ── Public API ───────────────────────────────────────────────────────
+
+
+def echarts_to_pptx(option: dict, theme: PptxTheme = DEFAULT) -> bytes:
     """Convert an ECharts option dict to a PowerPoint file returned as bytes.
 
     The resulting PPTX contains native, editable charts backed by embedded
     Excel worksheets.  Supported ECharts series types: bar, line, pie,
     scatter, effectScatter, and radar.  Sub-variants (donut, area, stacked,
     horizontal bar) are auto-detected from series properties.
+
+    An optional *theme* controls the color palette, fonts, and legend
+    placement applied to the exported chart.
     """
     prs = Presentation()
     prs.slide_width = SLIDE_WIDTH
@@ -297,13 +368,16 @@ def echarts_to_pptx(option: dict) -> bytes:
     chart_type = series_list[0].get("type", "bar")
 
     if chart_type == "pie":
-        _build_pie_chart(prs, option, series_list, as_donut=_is_donut(option, series_list))
+        _build_pie_chart(
+            prs, option, series_list, theme,
+            as_donut=_is_donut(option, series_list),
+        )
     elif chart_type in ("scatter", "effectScatter"):
-        _build_scatter_chart(prs, option, series_list)
+        _build_scatter_chart(prs, option, series_list, theme)
     elif chart_type == "radar":
-        _build_radar_chart(prs, option, series_list)
+        _build_radar_chart(prs, option, series_list, theme)
     else:
-        _build_category_chart(prs, option, series_list, chart_type)
+        _build_category_chart(prs, option, series_list, chart_type, theme)
 
     buf = BytesIO()
     prs.save(buf)

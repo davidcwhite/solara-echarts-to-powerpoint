@@ -7,6 +7,8 @@ description: >
   slides from structured data. Supports bar, stacked bar, horizontal bar,
   line, area, pie, donut, scatter, effectScatter, and radar chart types.
   Unsupported types (sunburst, treemap, etc.) are detected via is_exportable().
+  Includes a theming system (PptxTheme) with built-in Default, Corporate,
+  Vibrant, and Monochrome themes controlling palette, fonts, and legend position.
 compatibility: opencode
 ---
 
@@ -184,6 +186,59 @@ def Page():
         )
     else:
         solara.Button("Export not available", disabled=True)
+```
+
+## Theming
+
+The converter accepts an optional `PptxTheme` to control colours, fonts, and
+legend placement in the exported PPTX.
+
+### PptxTheme dataclass
+
+```python
+from theme import PptxTheme, DEFAULT, CORPORATE, VIBRANT, MONOCHROME, THEMES
+```
+
+Fields: `name`, `palette` (list of hex strings), `title_font`, `title_size`,
+`label_font`, `label_size`, `legend_position` (`"bottom"` or `"right"`).
+
+### Built-in themes
+
+| Theme | Style | Title font | Legend |
+|---|---|---|---|
+| Default | ECharts palette | Calibri 24pt | bottom |
+| Corporate | Muted blues/greys | Arial 22pt | right |
+| Vibrant | Bold saturated | Helvetica 26pt | bottom |
+| Monochrome | Single-hue shades | Calibri 24pt | bottom |
+
+### Passing a theme
+
+```python
+from converter import echarts_to_pptx
+from theme import CORPORATE
+
+pptx_bytes = echarts_to_pptx(option, theme=CORPORATE)
+```
+
+### How colours are applied
+
+- **Bar / stacked / horizontal**: `series.format.fill.solid()` + `fore_color.rgb`
+- **Line / radar**: `series.format.line.color.rgb` + `line.width`
+- **Pie / donut**: individual `point.format.fill` per slice
+- **Scatter**: `series.format.fill` per series
+
+### Solara theme selector
+
+```python
+from theme import THEMES
+
+theme_name, set_theme_name = solara.use_state("Default")
+theme = THEMES[theme_name]
+
+solara.Select(label="PPTX Theme", value=theme_name,
+              values=list(THEMES.keys()), on_value=set_theme_name)
+
+solara.FileDownload(lambda: echarts_to_pptx(option, theme=theme), ...)
 ```
 
 ## Gotchas

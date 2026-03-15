@@ -5,9 +5,11 @@ from pathlib import Path
 
 import pytest
 from pptx import Presentation
-from pptx.enum.chart import XL_CHART_TYPE
+from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 
 from converter import echarts_to_pptx, is_exportable
+from theme import CORPORATE, DEFAULT, MONOCHROME, VIBRANT, PptxTheme
 
 TEST_OUTPUT = Path(__file__).resolve().parent.parent / "test_output"
 
@@ -549,3 +551,125 @@ def test_xaxis_as_list():
     }
     chart = _load_chart(echarts_to_pptx(option))
     assert [str(c) for c in chart.plots[0].categories] == ["Q1", "Q2"]
+
+
+# ── Theme tests ─────────────────────────────────────────────────────
+
+THEMED_BAR = {
+    "title": {"text": "Themed Bar"},
+    "xAxis": {"type": "category", "data": ["A", "B"]},
+    "yAxis": {"type": "value"},
+    "series": [
+        {"name": "S1", "type": "bar", "data": [10, 20]},
+        {"name": "S2", "type": "bar", "data": [30, 40]},
+    ],
+}
+
+
+def _load_prs(pptx_bytes: bytes):
+    return Presentation(BytesIO(pptx_bytes))
+
+
+def test_default_theme_bar_series_colors():
+    data = echarts_to_pptx(THEMED_BAR, theme=DEFAULT)
+    (TEST_OUTPUT / "themed_default_bar.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    c0 = chart.series[0].format.fill.fore_color.rgb
+    c1 = chart.series[1].format.fill.fore_color.rgb
+    assert c0 == RGBColor.from_string(DEFAULT.palette[0])
+    assert c1 == RGBColor.from_string(DEFAULT.palette[1])
+
+
+def test_corporate_theme_bar_series_colors():
+    data = echarts_to_pptx(THEMED_BAR, theme=CORPORATE)
+    (TEST_OUTPUT / "themed_corporate_bar.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    c0 = chart.series[0].format.fill.fore_color.rgb
+    assert c0 == RGBColor.from_string(CORPORATE.palette[0])
+
+
+def test_vibrant_theme_bar_series_colors():
+    data = echarts_to_pptx(THEMED_BAR, theme=VIBRANT)
+    (TEST_OUTPUT / "themed_vibrant_bar.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    c0 = chart.series[0].format.fill.fore_color.rgb
+    assert c0 == RGBColor.from_string(VIBRANT.palette[0])
+
+
+def test_monochrome_theme_bar_series_colors():
+    data = echarts_to_pptx(THEMED_BAR, theme=MONOCHROME)
+    (TEST_OUTPUT / "themed_monochrome_bar.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    c0 = chart.series[0].format.fill.fore_color.rgb
+    assert c0 == RGBColor.from_string(MONOCHROME.palette[0])
+
+
+def test_theme_title_font():
+    data = echarts_to_pptx(THEMED_BAR, theme=CORPORATE)
+    prs = _load_prs(data)
+    slide = prs.slides[0]
+    for shape in slide.shapes:
+        if shape.has_text_frame:
+            p = shape.text_frame.paragraphs[0]
+            assert p.font.name == CORPORATE.title_font
+            assert p.font.size.pt == CORPORATE.title_size
+            break
+    else:
+        pytest.fail("No title textbox found")
+
+
+def test_theme_legend_position_bottom():
+    data = echarts_to_pptx(THEMED_BAR, theme=DEFAULT)
+    chart = _load_chart(data)
+    assert chart.has_legend
+    assert chart.legend.position == XL_LEGEND_POSITION.BOTTOM
+
+
+def test_theme_legend_position_right():
+    data = echarts_to_pptx(THEMED_BAR, theme=CORPORATE)
+    chart = _load_chart(data)
+    assert chart.has_legend
+    assert chart.legend.position == XL_LEGEND_POSITION.RIGHT
+
+
+def test_line_chart_uses_line_color():
+    option = {
+        "title": {"text": "Themed Line"},
+        "xAxis": {"type": "category", "data": ["A", "B"]},
+        "yAxis": {"type": "value"},
+        "series": [{"name": "L1", "type": "line", "data": [10, 20]}],
+    }
+    data = echarts_to_pptx(option, theme=VIBRANT)
+    (TEST_OUTPUT / "themed_vibrant_line.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    line_color = chart.series[0].format.line.color.rgb
+    assert line_color == RGBColor.from_string(VIBRANT.palette[0])
+
+
+def test_pie_chart_point_colors():
+    option = {
+        "series": [
+            {
+                "type": "pie",
+                "data": [
+                    {"name": "X", "value": 10},
+                    {"name": "Y", "value": 20},
+                ],
+            }
+        ],
+    }
+    data = echarts_to_pptx(option, theme=DEFAULT)
+    (TEST_OUTPUT / "themed_default_pie.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    p0 = chart.plots[0].series[0].points[0].format.fill.fore_color.rgb
+    p1 = chart.plots[0].series[0].points[1].format.fill.fore_color.rgb
+    assert p0 == RGBColor.from_string(DEFAULT.palette[0])
+    assert p1 == RGBColor.from_string(DEFAULT.palette[1])
+
+
+def test_all_themes_produce_valid_pptx():
+    """Smoke test: every built-in theme produces a loadable PPTX."""
+    for theme in (DEFAULT, CORPORATE, VIBRANT, MONOCHROME):
+        data = echarts_to_pptx(BAR_OPTION, theme=theme)
+        prs = _load_prs(data)
+        assert len(prs.slides) == 1

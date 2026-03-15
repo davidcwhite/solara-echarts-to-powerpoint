@@ -126,6 +126,65 @@ def Page():
 
 Run with `solara run app.py`.
 
+## Theming
+
+The converter accepts an optional `PptxTheme` controlling palette, fonts, and legend placement.
+
+### PptxTheme dataclass (`theme.py`)
+
+```python
+from theme import PptxTheme, DEFAULT, CORPORATE, VIBRANT, MONOCHROME, THEMES
+
+@dataclass
+class PptxTheme:
+    name: str
+    palette: List[str]        # hex colours applied to series in order
+    title_font: str           # font name for slide title
+    title_size: int           # point size
+    label_font: str           # font name for axis/data labels
+    label_size: int           # point size
+    legend_position: str      # "bottom" or "right"
+```
+
+### Built-in themes
+
+| Theme | Palette style | Title font | Legend |
+|---|---|---|---|
+| Default | ECharts default colours | Calibri 24pt | bottom |
+| Corporate | Muted blues/greys | Arial 22pt | right |
+| Vibrant | Bold saturated colours | Helvetica 26pt | bottom |
+| Monochrome | Shades of a single colour | Calibri 24pt | bottom |
+
+### Usage
+
+```python
+from converter import echarts_to_pptx
+from theme import CORPORATE
+
+pptx_bytes = echarts_to_pptx(option, theme=CORPORATE)
+```
+
+In Solara, add a theme selector:
+
+```python
+from theme import THEMES
+
+theme_name, set_theme_name = solara.use_state("Default")
+theme = THEMES[theme_name]
+
+solara.Select(label="PPTX Theme", value=theme_name,
+              values=list(THEMES.keys()), on_value=set_theme_name)
+
+solara.FileDownload(lambda: echarts_to_pptx(option, theme=theme), ...)
+```
+
+### How colours are applied
+
+- **Bar / stacked / horizontal**: `series.format.fill.solid()` + `fore_color.rgb`
+- **Line / radar**: `series.format.line.color.rgb`
+- **Pie / donut**: individual `point.format.fill` per slice
+- **Scatter**: `series.format.fill` per series
+
 ## Key Details
 
 - Use `slide_layouts[6]` (Blank) to avoid placeholder clutter.

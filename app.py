@@ -3,6 +3,7 @@
 import solara
 
 from converter import echarts_to_pptx, is_exportable
+from theme import THEMES
 
 CHARTS = {
     "Bar": {
@@ -234,8 +235,10 @@ PPTX_MIME = (
 @solara.component
 def Page():
     chart_type, set_chart_type = solara.use_state("Bar")
+    theme_name, set_theme_name = solara.use_state("Default")
 
     option = CHARTS[chart_type]
+    theme = THEMES[theme_name]
     exportable = is_exportable(option)
 
     with solara.AppLayout(title="ECharts to PowerPoint"):
@@ -254,9 +257,17 @@ def Page():
                     for label in CHARTS:
                         solara.Button(label)
 
+                solara.Select(
+                    label="PPTX Theme",
+                    value=theme_name,
+                    values=list(THEMES.keys()),
+                    on_value=set_theme_name,
+                    style={"min-width": "160px"},
+                )
+
                 if exportable:
                     solara.FileDownload(
-                        lambda: echarts_to_pptx(option),
+                        lambda: echarts_to_pptx(option, theme=theme),
                         filename=f"{chart_type.lower().replace(' ', '_')}_chart.pptx",
                         mime_type=PPTX_MIME,
                         label="Download PowerPoint",
