@@ -1,0 +1,3 @@
+solara
+python-pptx
+pytest
