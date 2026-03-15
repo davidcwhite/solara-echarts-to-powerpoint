@@ -7,7 +7,7 @@ import pytest
 from pptx import Presentation
 from pptx.enum.chart import XL_CHART_TYPE
 
-from converter import echarts_to_pptx
+from converter import echarts_to_pptx, is_exportable
 
 TEST_OUTPUT = Path(__file__).resolve().parent.parent / "test_output"
 
@@ -110,6 +110,85 @@ def test_named_data_values():
     assert list(chart.series[0].values) == [5.0, 10.0, 20.0]
 
 
+# ── Stacked bar ─────────────────────────────────────────────────────
+
+STACKED_BAR_OPTION = {
+    "title": {"text": "Stacked Bar Test"},
+    "xAxis": {"type": "category", "data": ["Q1", "Q2", "Q3"]},
+    "yAxis": {"type": "value"},
+    "series": [
+        {"name": "Online", "type": "bar", "stack": "total", "data": [100, 200, 300]},
+        {"name": "In-Store", "type": "bar", "stack": "total", "data": [50, 80, 120]},
+    ],
+}
+
+
+def test_stacked_bar_type():
+    data = echarts_to_pptx(STACKED_BAR_OPTION)
+    (TEST_OUTPUT / "stacked_bar_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.COLUMN_STACKED
+
+
+def test_stacked_bar_series_count():
+    chart = _load_chart(echarts_to_pptx(STACKED_BAR_OPTION))
+    assert len(chart.series) == 2
+
+
+def test_stacked_bar_values():
+    chart = _load_chart(echarts_to_pptx(STACKED_BAR_OPTION))
+    assert list(chart.series[0].values) == [100.0, 200.0, 300.0]
+    assert list(chart.series[1].values) == [50.0, 80.0, 120.0]
+
+
+# ── Horizontal bar ──────────────────────────────────────────────────
+
+HORIZONTAL_BAR_OPTION = {
+    "title": {"text": "Horizontal Bar Test"},
+    "xAxis": {"type": "value"},
+    "yAxis": {"type": "category", "data": ["Speed", "UX", "Support"]},
+    "series": [{"name": "Score", "type": "bar", "data": [85, 78, 88]}],
+}
+
+
+def test_horizontal_bar_type():
+    data = echarts_to_pptx(HORIZONTAL_BAR_OPTION)
+    (TEST_OUTPUT / "horizontal_bar_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.BAR_CLUSTERED
+
+
+def test_horizontal_bar_categories():
+    chart = _load_chart(echarts_to_pptx(HORIZONTAL_BAR_OPTION))
+    categories = [str(c) for c in chart.plots[0].categories]
+    assert categories == ["Speed", "UX", "Support"]
+
+
+def test_horizontal_bar_values():
+    chart = _load_chart(echarts_to_pptx(HORIZONTAL_BAR_OPTION))
+    assert list(chart.series[0].values) == [85.0, 78.0, 88.0]
+
+
+# ── Stacked horizontal bar ──────────────────────────────────────────
+
+STACKED_HORIZONTAL_BAR_OPTION = {
+    "title": {"text": "Stacked Horizontal Bar"},
+    "xAxis": {"type": "value"},
+    "yAxis": {"type": "category", "data": ["A", "B"]},
+    "series": [
+        {"name": "S1", "type": "bar", "stack": "t", "data": [10, 20]},
+        {"name": "S2", "type": "bar", "stack": "t", "data": [30, 40]},
+    ],
+}
+
+
+def test_stacked_horizontal_bar_type():
+    data = echarts_to_pptx(STACKED_HORIZONTAL_BAR_OPTION)
+    (TEST_OUTPUT / "stacked_horizontal_bar.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.BAR_STACKED
+
+
 # ── Line chart ──────────────────────────────────────────────────────
 
 LINE_OPTION = {
@@ -137,6 +216,50 @@ def test_line_chart_categories():
 def test_line_chart_values():
     chart = _load_chart(echarts_to_pptx(LINE_OPTION))
     assert list(chart.series[0].values) == [300.0, 450.0, 500.0]
+
+
+# ── Area chart (line + areaStyle) ───────────────────────────────────
+
+AREA_OPTION = {
+    "title": {"text": "Area Test"},
+    "xAxis": {"type": "category", "data": ["Mon", "Tue", "Wed"]},
+    "yAxis": {"type": "value"},
+    "series": [
+        {"name": "Traffic", "type": "line", "areaStyle": {}, "data": [820, 932, 901]},
+    ],
+}
+
+
+def test_area_chart_type():
+    data = echarts_to_pptx(AREA_OPTION)
+    (TEST_OUTPUT / "area_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.AREA
+
+
+def test_area_chart_values():
+    chart = _load_chart(echarts_to_pptx(AREA_OPTION))
+    assert list(chart.series[0].values) == [820.0, 932.0, 901.0]
+
+
+# ── Stacked area ───────────────────────────────────────────────────
+
+STACKED_AREA_OPTION = {
+    "title": {"text": "Stacked Area"},
+    "xAxis": {"type": "category", "data": ["A", "B"]},
+    "yAxis": {"type": "value"},
+    "series": [
+        {"name": "S1", "type": "line", "areaStyle": {}, "stack": "t", "data": [10, 20]},
+        {"name": "S2", "type": "line", "areaStyle": {}, "stack": "t", "data": [30, 40]},
+    ],
+}
+
+
+def test_stacked_area_type():
+    data = echarts_to_pptx(STACKED_AREA_OPTION)
+    (TEST_OUTPUT / "stacked_area_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.AREA_STACKED
 
 
 # ── Pie chart ───────────────────────────────────────────────────────
@@ -174,6 +297,65 @@ def test_pie_chart_values():
     assert list(chart.series[0].values) == [100.0, 200.0, 300.0]
 
 
+# ── Donut chart (pie with inner radius) ─────────────────────────────
+
+DONUT_OPTION = {
+    "title": {"text": "Donut Test"},
+    "series": [
+        {
+            "name": "Browsers",
+            "type": "pie",
+            "radius": ["40%", "70%"],
+            "data": [
+                {"name": "Chrome", "value": 65},
+                {"name": "Firefox", "value": 12},
+                {"name": "Safari", "value": 15},
+            ],
+        }
+    ],
+}
+
+
+def test_donut_chart_type():
+    data = echarts_to_pptx(DONUT_OPTION)
+    (TEST_OUTPUT / "donut_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.DOUGHNUT
+
+
+def test_donut_categories():
+    chart = _load_chart(echarts_to_pptx(DONUT_OPTION))
+    assert [str(c) for c in chart.plots[0].categories] == [
+        "Chrome",
+        "Firefox",
+        "Safari",
+    ]
+
+
+def test_donut_values():
+    chart = _load_chart(echarts_to_pptx(DONUT_OPTION))
+    assert list(chart.series[0].values) == [65.0, 12.0, 15.0]
+
+
+def test_pie_without_radius_is_not_donut():
+    chart = _load_chart(echarts_to_pptx(PIE_OPTION))
+    assert chart.chart_type == XL_CHART_TYPE.PIE
+
+
+def test_pie_with_zero_inner_radius_is_not_donut():
+    option = {
+        "series": [
+            {
+                "type": "pie",
+                "radius": ["0%", "60%"],
+                "data": [{"name": "X", "value": 1}],
+            }
+        ],
+    }
+    chart = _load_chart(echarts_to_pptx(option))
+    assert chart.chart_type == XL_CHART_TYPE.PIE
+
+
 # ── Scatter chart ───────────────────────────────────────────────────
 
 SCATTER_OPTION = {
@@ -200,6 +382,138 @@ def test_scatter_chart_type():
 def test_scatter_series_count():
     chart = _load_chart(echarts_to_pptx(SCATTER_OPTION))
     assert len(chart.series) == 1
+
+
+# ── effectScatter (treated as scatter) ──────────────────────────────
+
+EFFECT_SCATTER_OPTION = {
+    "title": {"text": "Effect Scatter"},
+    "xAxis": {"type": "value"},
+    "yAxis": {"type": "value"},
+    "series": [
+        {
+            "name": "Ripples",
+            "type": "effectScatter",
+            "data": [[5, 50], [10, 100]],
+        }
+    ],
+}
+
+
+def test_effect_scatter_type():
+    data = echarts_to_pptx(EFFECT_SCATTER_OPTION)
+    (TEST_OUTPUT / "effect_scatter_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.XY_SCATTER
+
+
+# ── Radar chart ─────────────────────────────────────────────────────
+
+RADAR_OPTION = {
+    "title": {"text": "Radar Test"},
+    "radar": {
+        "indicator": [
+            {"name": "Eng", "max": 100},
+            {"name": "Design", "max": 100},
+            {"name": "Sales", "max": 100},
+        ]
+    },
+    "series": [
+        {
+            "type": "radar",
+            "data": [
+                {"value": [90, 65, 80], "name": "Team A"},
+                {"value": [70, 85, 60], "name": "Team B"},
+            ],
+        }
+    ],
+}
+
+
+def test_radar_chart_type():
+    data = echarts_to_pptx(RADAR_OPTION)
+    (TEST_OUTPUT / "radar_chart.pptx").write_bytes(data)
+    chart = _load_chart(data)
+    assert chart.chart_type == XL_CHART_TYPE.RADAR_MARKERS
+
+
+def test_radar_categories():
+    chart = _load_chart(echarts_to_pptx(RADAR_OPTION))
+    categories = [str(c) for c in chart.plots[0].categories]
+    assert categories == ["Eng", "Design", "Sales"]
+
+
+def test_radar_series_count():
+    chart = _load_chart(echarts_to_pptx(RADAR_OPTION))
+    assert len(chart.series) == 2
+
+
+def test_radar_values():
+    chart = _load_chart(echarts_to_pptx(RADAR_OPTION))
+    assert list(chart.series[0].values) == [90.0, 65.0, 80.0]
+    assert list(chart.series[1].values) == [70.0, 85.0, 60.0]
+
+
+# ── is_exportable ───────────────────────────────────────────────────
+
+
+def test_exportable_bar():
+    assert is_exportable(BAR_OPTION) is True
+
+
+def test_exportable_line():
+    assert is_exportable(LINE_OPTION) is True
+
+
+def test_exportable_pie():
+    assert is_exportable(PIE_OPTION) is True
+
+
+def test_exportable_scatter():
+    assert is_exportable(SCATTER_OPTION) is True
+
+
+def test_exportable_effect_scatter():
+    assert is_exportable(EFFECT_SCATTER_OPTION) is True
+
+
+def test_exportable_radar():
+    assert is_exportable(RADAR_OPTION) is True
+
+
+def test_not_exportable_sunburst():
+    option = {"series": [{"type": "sunburst", "data": []}]}
+    assert is_exportable(option) is False
+
+
+def test_not_exportable_treemap():
+    option = {"series": [{"type": "treemap", "data": []}]}
+    assert is_exportable(option) is False
+
+
+def test_not_exportable_funnel():
+    option = {"series": [{"type": "funnel", "data": []}]}
+    assert is_exportable(option) is False
+
+
+def test_not_exportable_gauge():
+    option = {"series": [{"type": "gauge", "data": []}]}
+    assert is_exportable(option) is False
+
+
+def test_not_exportable_sankey():
+    option = {"series": [{"type": "sankey", "data": []}]}
+    assert is_exportable(option) is False
+
+
+def test_not_exportable_heatmap():
+    option = {"series": [{"type": "heatmap", "data": []}]}
+    assert is_exportable(option) is False
+
+
+def test_not_exportable_empty():
+    assert is_exportable({}) is False
+    assert is_exportable({"series": []}) is False
 
 
 # ── Edge cases ──────────────────────────────────────────────────────
